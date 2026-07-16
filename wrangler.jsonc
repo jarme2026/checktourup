@@ -1,5 +1,5 @@
 {
-  "name": "check-list-tour-thursday",
+  "name": "checktourup",
   "compatibility_date": "2026-07-15",
   "main": "src/index.js",
   "assets": {
@@ -10,7 +10,7 @@
   "kv_namespaces": [
     {
       "binding": "DATA",
-      "id": "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+      "id": "4e6ebdba399c4cdb8e666725a206b573"
     }
   ]
 }
