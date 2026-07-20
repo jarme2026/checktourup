@@ -4,22 +4,19 @@ async function getDataset(env) {
 }
 
 async function getAllTicks(env) {
-  const ticks = {};
-  const allKeys = [];
-  let cursor;
-  for (;;) {
-    const list = await env.DATA.list({ prefix: 'tick:', cursor });
-    allKeys.push(...list.keys);
-    if (list.list_complete) break;
-    cursor = list.cursor;
+  const raw = await env.DATA.get('ticks');
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function withRetry(fn, attempts = 4, delayMs = 300) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === attempts - 1) throw err;
+      await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+    }
   }
-  // Read every tick in parallel instead of one at a time — this is the
-  // biggest speed win when there are many rows.
-  const results = await Promise.all(allKeys.map(k => env.DATA.get(k.name)));
-  allKeys.forEach((k, i) => {
-    if (results[i]) ticks[k.name.slice('tick:'.length)] = JSON.parse(results[i]);
-  });
-  return ticks;
 }
 
 function json(data, status = 200) {
@@ -47,7 +44,9 @@ export default {
         });
       }
 
-      // Public: progress marks ONLY — small and fast, used for polling
+      // Public: progress marks ONLY — one simple read, used for polling.
+      // No "list" operation here on purpose (KV free tier only allows
+      // 1,000 list ops/day, but 100,000 plain reads/day).
       if (url.pathname === '/api/ticks' && request.method === 'GET') {
         const ticks = await getAllTicks(env);
         return json({ ticks });
@@ -65,26 +64,22 @@ export default {
         return json({ ok: true });
       }
 
-      // Update one row's progress — each row has its own key, so different
-      // rows never collide with each other or with a dataset save
+      // Update one row's progress — read-modify-write on the single
+      // "ticks" blob, retried briefly if two edits land in the same
+      // instant (KV allows only 1 write/sec on the same key).
       if (url.pathname === '/api/tick' && request.method === 'POST') {
         const body = await request.json();
-        await env.DATA.put('tick:' + body.key, JSON.stringify({
-          qty: body.qty,
-          date: body.date
-        }));
+        await withRetry(async () => {
+          const ticks = await getAllTicks(env);
+          ticks[body.key] = { qty: body.qty, date: body.date };
+          await env.DATA.put('ticks', JSON.stringify(ticks));
+        });
         return json({ ok: true });
       }
 
       // Clear all progress marks
       if (url.pathname === '/api/reset' && request.method === 'POST') {
-        let cursor;
-        for (;;) {
-          const list = await env.DATA.list({ prefix: 'tick:', cursor });
-          await Promise.all(list.keys.map(k => env.DATA.delete(k.name)));
-          if (list.list_complete) break;
-          cursor = list.cursor;
-        }
+        await env.DATA.put('ticks', JSON.stringify({}));
         return json({ ok: true });
       }
 
