@@ -3,20 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>checktourup</title>
+<title>checktourbo</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
-    --paper: #FDF8E1;
-    --paper-line: #F3E9B8;
-    --ink: #3A3320;
-    --ink-soft: #7D7248;
+    --paper: #F6F1E4;
+    --paper-line: #E4DBC4;
+    --ink: #2E2A22;
+    --ink-soft: #6B6353;
     --stamp-green: #2F6B4F;
     --stamp-green-bg: #E3EEE6;
     --stamp-red: #A94438;
-    --board: #EBD873;
-    --board-dark: #B8A23A;
-    --card: #FFFEF6;
+    --board: #C9BFA5;
+    --board-dark: #8B8168;
+    --card: #FFFEFA;
   }
   *{box-sizing:border-box;}
   body{
@@ -226,7 +226,7 @@
     <rect x="55" y="14" width="30" height="20" rx="6" fill="#C9BFA5" stroke="#8B8168" stroke-width="2"/>
   </svg>
   <div class="board">
-    <h1>Check List Tour — Upholstery</h1>
+    <h1>Check List Tour — Board</h1>
     <p class="subtitle" id="subtitle">Import the sheet, pick the column to check off, and search anything inside it.</p>
 
     <div id="uploadArea" style="display:none;">
@@ -258,6 +258,7 @@
           <select id="qtyColSelect"></select>
         </div>
         <button class="btn danger" id="resetBtn">Clear all progress</button>
+        <button class="btn" id="testReportBtn">Send test report now</button>
       </div>
 
       <div class="search-wrap">
@@ -630,14 +631,22 @@ function updateProgress(){
 async function maybeSendReport(){
   try{
     const res = await fetch('/api/send-report', { method: 'POST' });
-    if (!res.ok) return;
-    const data = await res.json();
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if (!res.ok){
+      console.error('Send report failed', data);
+      if (isAdmin) alert('Could not send the report email: ' + (data && data.error ? data.error : ('HTTP ' + res.status)));
+      return;
+    }
     if (data && data.sent){
       const banner = document.getElementById('allDoneBanner');
       banner.textContent = '✓ All items checked — a report was emailed.';
+    } else if (data && data.skipped && isAdmin){
+      console.log('Report not sent:', data.reason);
     }
   }catch(e){
     console.error('Failed to send report', e);
+    if (isAdmin) alert('Could not reach the server to send the report.');
   }
 }
 
@@ -996,6 +1005,33 @@ resetBtn.addEventListener('click', async () => {
     renderTable();
   }
 });
+
+const testReportBtn = document.getElementById('testReportBtn');
+if (testReportBtn){
+  testReportBtn.addEventListener('click', async () => {
+    testReportBtn.disabled = true;
+    testReportBtn.textContent = 'Sending…';
+    try{
+      const res = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force: true })
+      });
+      let data = null;
+      try{ data = await res.json(); }catch(e){}
+      if (res.ok && data && data.sent){
+        alert('Test email sent! Check the inbox (and spam folder) for jarme@boconcept.com.');
+      } else {
+        alert('Could not send: ' + (data && data.error ? data.error : ('HTTP ' + res.status)));
+      }
+    }catch(e){
+      alert('Could not reach the server.');
+    }finally{
+      testReportBtn.disabled = false;
+      testReportBtn.textContent = 'Send test report now';
+    }
+  });
+}
 
 async function init(){
   const state = await loadState();
