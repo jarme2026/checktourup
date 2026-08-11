@@ -96,19 +96,66 @@ export class ChecklistState {
     if (!recipients.length) {
       return { ok: false, error: 'No REPORT_RECIPIENTS configured' };
     }
-    if (!this.env.RESEND_API_KEY) {
-      const visibleKeys = Object.keys(this.env || {}).join(', ') || '(none)';
-      return { ok: false, error: 'No RESEND_API_KEY configured. Bindings visible to this Durable Object: [' + visibleKeys + ']' };
-    }
+    async sendReportEmail() {
+  const csv = await this.buildCsv();
 
-    const bytes = new TextEncoder().encode(csv);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    const base64 = btoa(binary);
+  const recipients = (this.env.REPORT_RECIPIENTS || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
+  if (!recipients.length) {
+    return { ok: false, error: 'No REPORT_RECIPIENTS configured' };
+  }
+
+  const apiKey = await this.env.RESEND_API_KEY.get();
+
+  if (!apiKey) {
+    return { ok: false, error: 'No RESEND_API_KEY configured' };
+  }
+
+  const bytes = new TextEncoder().encode(csv);
+  let binary = '';
+
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+
+  const base64 = btoa(binary);
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+
+    headers: {
+      'Authorization': 'Bearer ' + apiKey,
+      'content-type': 'application/json'
+    },
+
+    body: JSON.stringify({
+      from: 'Check List Tour <onboarding@resend.dev>',
+      to: recipients,
+      subject: 'Checklist complete — all items confirmed',
+      text: 'The checklist has been fully checked off. The updated sheet is attached as a CSV.',
+      attachments: [
+        {
+          filename: 'checklist-complete.csv',
+          content: base64
+        }
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+
+    return {
+      ok: false,
+      error: 'Resend API error (' + res.status + '): ' + errText
+    };
+  }
+
+  return { ok: true };
+}
         'Authorization': 'Bearer ' + this.env.RESEND_API_KEY,
         'content-type': 'application/json'
       },
