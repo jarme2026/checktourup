@@ -87,7 +87,7 @@ export class ChecklistState {
   }
 
   async sendReportEmail() {
-    const csv = await this.buildCsv();
+    const apiKey = await this.env.RESEND_API_KEY.get();
     const recipients = (this.env.REPORT_RECIPIENTS || '')
       .split(',')
       .map(s => s.trim())
@@ -96,7 +96,6 @@ export class ChecklistState {
     if (!recipients.length) {
       return { ok: false, error: 'No REPORT_RECIPIENTS configured' };
     }
-    async sendReportEmail() {
   const csv = await this.buildCsv();
 
   const recipients = (this.env.REPORT_RECIPIENTS || '')
