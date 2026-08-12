@@ -18,4 +18,11 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChecklistState"] }
   ]
+"secrets_store_secrets": [
+  {
+    "binding": "RESEND_API_KEY",
+    "store_id": "07fda41a4c7444849daa3e4232849687",
+    "secret_name": "RESEND_API_KEY"
+  }
+]
 }
