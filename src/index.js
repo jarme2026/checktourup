@@ -146,4 +146,4 @@ export class ChecklistState {
 
     return { ok: true };
   }
-  
+  ^
