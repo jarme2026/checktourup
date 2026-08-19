@@ -222,9 +222,7 @@ export class ChecklistState {
     return true;
   }
 
-  async buildCsv(
-    checkedBy = ""
-  ) {
+  async buildCsv() {
     const dataset =
       await this.getDataset();
 
@@ -232,9 +230,10 @@ export class ChecklistState {
       await this.getAllTicks();
 
     const notes =
-
-        const checkedByRows = await this.getAllCheckedBy();
       await this.getAllNotes();
+
+    const checkedByRows =
+      await this.getAllCheckedBy();
 
     if (!dataset) {
       return "";
@@ -351,7 +350,7 @@ export class ChecklistState {
             ...row,
             status,
             note,
-            checkedBy
+            checkedByRows[key] || ""
           ]
             .map(
               escape
@@ -630,9 +629,13 @@ export class ChecklistState {
         const notes =
           await this.getAllNotes();
 
+        const checkedByRows =
+          await this.getAllCheckedBy();
+
         return json({
           ticks,
-          notes
+          notes,
+          checkedByRows
         });
       }
 
