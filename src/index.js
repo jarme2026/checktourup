@@ -1253,16 +1253,16 @@ export class ChecklistState {
           ).trim();
 
 
-        const checkedBy =
-          force
-            ? (
-                ALLOWED_CHECKERS.has(
-                  requestedChecker
-                )
-                  ? requestedChecker
-                  : "Test email"
-              )
-            : requestedChecker;
+      const checkedBy =
+  force
+    ? (
+        ALLOWED_CHECKERS.has(
+          requestedChecker
+        )
+          ? requestedChecker
+          : ""
+      )
+    : requestedChecker;
 
 
         // ===============================================
