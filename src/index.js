@@ -7,11 +7,13 @@
 // Adrian / Leo / Liviu
 // =====================================================
 
-const ALLOWED_CHECKERS = new Set([
-  "Adrian",
-  "Leo",
-  "Liviu"
-]);
+
+function normalizeCheckerName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 50);
+}
 
 export class ChecklistState {
   constructor(state, env) {
@@ -869,33 +871,12 @@ export class ChecklistState {
           body.force ===
           true;
 
-        const requestedChecker =
-          String(
-            body.checkedBy
-            ||
-            ""
-          ).trim();
+        const requestedChecker = normalizeCheckerName(body.checkedBy);
+        const checkedBy = force ? '' : requestedChecker;
 
-        const checkedBy =
-          force
-            ? ""
-            : requestedChecker;
-
-        if (
-          !force
-          &&
-          !ALLOWED_CHECKERS.has(
-            checkedBy
-          )
-        ) {
+        if (!force && checkedBy.length < 2) {
           return json(
-            {
-              ok:
-                false,
-
-              error:
-                "Please select who checked the list: Adrian, Leo or Liviu."
-            },
+            { ok: false, error: 'Please enter the name of the person who checked the list.' },
             400
           );
         }
