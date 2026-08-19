@@ -13,73 +13,40 @@ const ALLOWED_CHECKERS = new Set([
   "Liviu"
 ]);
 
-
-// =====================================================
-// DURABLE OBJECT
-// =====================================================
-
 export class ChecklistState {
-
   constructor(state, env) {
     this.state = state;
     this.env = env;
   }
 
-
-  // ===================================================
-  // DATASET
-  // ===================================================
-
   async getDataset() {
-
     return (
       await this.state.storage.get(
         "dataset"
       )
     ) || null;
-
   }
 
-
-  // ===================================================
-  // TICKS
-  // ===================================================
-
   async getAllTicks() {
-
     return (
       await this.state.storage.get(
         "ticks"
       )
     ) || {};
-
   }
 
-
-  // ===================================================
-  // NOTES
-  // ===================================================
-
   async getAllNotes() {
-
     return (
       await this.state.storage.get(
         "notes"
       )
     ) || {};
-
   }
-
-
-  // ===================================================
-  // EXPECTED QUANTITY
-  // ===================================================
 
   parseExpectedQty(
     row,
     qtyColIndex
   ) {
-
     if (
       qtyColIndex == null ||
       qtyColIndex < 0
@@ -87,10 +54,8 @@ export class ChecklistState {
       return 1;
     }
 
-
     const raw =
       row[qtyColIndex];
-
 
     if (
       raw === undefined ||
@@ -99,7 +64,6 @@ export class ChecklistState {
     ) {
       return 1;
     }
-
 
     const normalized =
       String(raw)
@@ -111,7 +75,6 @@ export class ChecklistState {
           ""
         );
 
-
     const n =
       Math.round(
         Math.abs(
@@ -121,23 +84,15 @@ export class ChecklistState {
         )
       );
 
-
     return (
       Number.isFinite(n) &&
       n > 0
     )
       ? n
       : 1;
-
   }
 
-
-  // ===================================================
-  // UNIQUE ROW KEY
-  // ===================================================
-
   rowKey(row) {
-
     const str =
       row
         .map(
@@ -150,16 +105,13 @@ export class ChecklistState {
         )
         .join("|");
 
-
     let h = 0;
-
 
     for (
       let i = 0;
       i < str.length;
       i++
     ) {
-
       h =
         (
           Math.imul(
@@ -171,9 +123,7 @@ export class ChecklistState {
         )
         |
         0;
-
     }
-
 
     return (
       "r"
@@ -181,64 +131,42 @@ export class ChecklistState {
       (h >>> 0)
         .toString(36)
     );
-
   }
 
-
-  // ===================================================
-  // CHECK IF EVERYTHING IS COMPLETE
-  //
-  // Complete when:
-  // quantity reached expected quantity
-  // OR
-  // a note was entered
-  // ===================================================
-
   async isFullyComplete() {
-
     const dataset =
       await this.getDataset();
-
 
     if (
       !dataset ||
       !dataset.rows ||
       !dataset.rows.length
     ) {
-
       return false;
-
     }
-
 
     const ticks =
       await this.getAllTicks();
 
-
     const notes =
       await this.getAllNotes();
 
-
     const seen = {};
-
 
     for (
       const row
       of
       dataset.rows
     ) {
-
       const base =
         this.rowKey(
           row
         );
 
-
       seen[base] =
         (seen[base] || 0)
         +
         1;
-
 
       const key =
         seen[base] > 1
@@ -249,13 +177,11 @@ export class ChecklistState {
             seen[base]
           : base;
 
-
       const expected =
         this.parseExpectedQty(
           row,
           dataset.qtyColIndex
         );
-
 
       const done =
         ticks[key]
@@ -266,7 +192,6 @@ export class ChecklistState {
             )
           : 0;
 
-
       const note =
         String(
           notes[key]
@@ -274,66 +199,39 @@ export class ChecklistState {
           ""
         ).trim();
 
-
       if (
         done < expected &&
         !note
       ) {
-
         return false;
-
       }
-
     }
 
-
     return true;
-
   }
-
-
-  // ===================================================
-  // BUILD CSV
-  //
-  // Adds:
-  // Status
-  // Notes
-  // Checked By
-  // ===================================================
 
   async buildCsv(
     checkedBy = ""
   ) {
-
     const dataset =
       await this.getDataset();
-
 
     const ticks =
       await this.getAllTicks();
 
-
     const notes =
       await this.getAllNotes();
 
-
-    if (
-      !dataset
-    ) {
-
+    if (!dataset) {
       return "";
-
     }
-
 
     const escape =
       value => {
-
         const s =
           String(
             value ?? ""
           );
-
 
         return /[",\n]/.test(s)
           ? '"'
@@ -345,20 +243,12 @@ export class ChecklistState {
             +
             '"'
           : s;
-
       };
 
-
     const seen = {};
-
-
     const lines = [];
 
-
-    // HEADER
-
     lines.push(
-
       [
         ...dataset.headers,
         "Status",
@@ -369,26 +259,19 @@ export class ChecklistState {
           escape
         )
         .join(",")
-
     );
-
-
-    // ROWS
 
     dataset.rows.forEach(
       row => {
-
         const base =
           this.rowKey(
             row
           );
 
-
         seen[base] =
           (seen[base] || 0)
           +
           1;
-
 
         const key =
           seen[base] > 1
@@ -399,17 +282,14 @@ export class ChecklistState {
               seen[base]
             : base;
 
-
         const expected =
           this.parseExpectedQty(
             row,
             dataset.qtyColIndex
           );
 
-
         const tickState =
           ticks[key];
-
 
         const done =
           tickState
@@ -420,7 +300,6 @@ export class ChecklistState {
               )
             : 0;
 
-
         const note =
           String(
             notes[key]
@@ -428,47 +307,32 @@ export class ChecklistState {
             ""
           ).trim();
 
-
         let status;
-
 
         if (
           done >= expected
         ) {
-
           status =
             "Done";
-
         }
-
         else if (
           note
         ) {
-
           status =
             "Not available / noted";
-
         }
-
         else if (
           done > 0
         ) {
-
           status =
             `Partial (${done}/${expected})`;
-
         }
-
         else {
-
           status =
             "Not done";
-
         }
 
-
         lines.push(
-
           [
             ...row,
             status,
@@ -479,85 +343,47 @@ export class ChecklistState {
               escape
             )
             .join(",")
-
         );
-
       }
     );
-
 
     return lines.join(
       "\r\n"
     );
-
   }
 
-
-  // ===================================================
-  // RESEND API KEY
-  //
-  // Supports:
-  // Cloudflare Secrets Store
-  // OR normal Worker Secret
-  // ===================================================
-
   async getResendApiKey() {
-
     const binding =
       this.env.RESEND_API_KEY;
 
-
-    if (
-      !binding
-    ) {
-
+    if (!binding) {
       return null;
-
     }
-
-
-    // Secrets Store
 
     if (
       typeof binding.get ===
       "function"
     ) {
-
       return await binding.get();
-
     }
-
-
-    // Normal Worker Secret
 
     if (
       typeof binding ===
       "string"
     ) {
-
       return binding;
-
     }
 
-
     return null;
-
   }
-
-
-  // ===================================================
-  // SEND EMAIL
-  // ===================================================
 
   async sendReportEmail(
     checkedBy
   ) {
-
     const csv =
       await this.buildCsv(
         checkedBy
       );
-
 
     const recipients =
       (
@@ -574,48 +400,30 @@ export class ChecklistState {
           Boolean
         );
 
-
     if (
       !recipients.length
     ) {
-
       return {
-
         ok:
           false,
-
         error:
           "No REPORT_RECIPIENTS configured"
-
       };
-
     }
-
 
     const apiKey =
       await this.getResendApiKey();
 
-
     if (
       !apiKey
     ) {
-
       return {
-
         ok:
           false,
-
         error:
           "No RESEND_API_KEY configured"
-
       };
-
     }
-
-
-    // =================================================
-    // CSV -> BASE64
-    // =================================================
 
     const bytes =
       new TextEncoder()
@@ -623,29 +431,23 @@ export class ChecklistState {
           csv
         );
 
-
     let binary = "";
-
 
     for (
       let i = 0;
       i < bytes.length;
       i++
     ) {
-
       binary +=
         String.fromCharCode(
           bytes[i]
         );
-
     }
-
 
     const base64 =
       btoa(
         binary
       );
-
 
     const safeChecker =
       String(
@@ -654,94 +456,69 @@ export class ChecklistState {
         ""
       ).trim();
 
+    const subjectSuffix =
+      safeChecker
+        ? " — checked by " + safeChecker
+        : "";
 
-    // =================================================
-    // RESEND
-    // =================================================
+    const textCheckerLine =
+      safeChecker
+        ? "\n\nChecked by: " + safeChecker
+        : "";
 
     const res =
       await fetch(
-
         "https://api.resend.com/emails",
-
         {
-
           method:
             "POST",
 
-
           headers: {
-
             Authorization:
               "Bearer "
               +
               apiKey,
 
-
             "content-type":
               "application/json"
-
           },
-
 
           body:
             JSON.stringify({
-
               from:
                 "Check List Tour <onboarding@resend.dev>",
-
 
               to:
                 recipients,
 
-
               subject:
-                "Checklist complete — checked by "
+                "Checklist complete"
                 +
-                safeChecker,
-
+                subjectSuffix,
 
               text:
-
-                "The checklist has been fully checked off.\n\n"
-
+                "The checklist has been fully checked off."
                 +
-
-                "Checked by: "
+                textCheckerLine
                 +
-                safeChecker
-
-                +
-
                 "\n\nThe updated sheet is attached as a CSV.",
 
-
               attachments: [
-
                 {
-
                   filename:
                     "checklist-complete.csv",
 
-
                   content:
                     base64
-
                 }
-
               ]
-
             })
-
         }
-
       );
-
 
     if (
       !res.ok
     ) {
-
       const errText =
         await res
           .text()
@@ -749,64 +526,36 @@ export class ChecklistState {
             () => ""
           );
 
-
       return {
-
         ok:
           false,
 
-
         error:
-
           "Resend API error ("
-
           +
-
           res.status
-
           +
-
           "): "
-
           +
-
           errText
-
       };
-
     }
 
-
     return {
-
       ok:
         true
-
     };
-
   }
-
-
-  // ===================================================
-  // DURABLE OBJECT FETCH
-  // ===================================================
 
   async fetch(
     request
   ) {
-
     const url =
       new URL(
         request.url
       );
 
-
     try {
-
-
-      // =================================================
-      // GET STATE
-      // =================================================
 
       if (
         url.pathname ===
@@ -815,57 +564,41 @@ export class ChecklistState {
         request.method ===
           "GET"
       ) {
-
         const dataset =
           await this.getDataset();
-
 
         const ticks =
           await this.getAllTicks();
 
-
         const notes =
           await this.getAllNotes();
 
-
         return json({
-
           headers:
             dataset
               ? dataset.headers
               : [],
-
 
           rows:
             dataset
               ? dataset.rows
               : [],
 
-
           tickColIndex:
             dataset
               ? dataset.tickColIndex
               : -1,
-
 
           qtyColIndex:
             dataset
               ? dataset.qtyColIndex
               : -1,
 
-
           ticks,
 
           notes
-
         });
-
       }
-
-
-      // =================================================
-      // GET TICKS
-      // =================================================
 
       if (
         url.pathname ===
@@ -874,29 +607,17 @@ export class ChecklistState {
         request.method ===
           "GET"
       ) {
-
         const ticks =
           await this.getAllTicks();
-
 
         const notes =
           await this.getAllNotes();
 
-
         return json({
-
           ticks,
-
           notes
-
         });
-
       }
-
-
-      // =================================================
-      // SAVE DATASET
-      // =================================================
 
       if (
         url.pathname ===
@@ -905,59 +626,36 @@ export class ChecklistState {
         request.method ===
           "POST"
       ) {
-
         const body =
           await request.json();
 
-
         await this.state.storage.put(
-
           "dataset",
-
           {
-
             headers:
               body.headers,
-
 
             rows:
               body.rows,
 
-
             tickColIndex:
               body.tickColIndex,
 
-
             qtyColIndex:
               body.qtyColIndex
-
           }
-
         );
-
-
-        // New checklist:
-        // allow a new report.
 
         await this.state.storage.put(
           "reportSent",
           false
         );
 
-
         return json({
-
           ok:
             true
-
         });
-
       }
-
-
-      // =================================================
-      // TICK
-      // =================================================
 
       if (
         url.pathname ===
@@ -966,29 +664,22 @@ export class ChecklistState {
         request.method ===
           "POST"
       ) {
-
         const body =
           await request.json();
 
-
         const ticks =
           await this.getAllTicks();
-
 
         const current =
           ticks[body.key]
           ||
           {
-
             qty:
               0,
 
-
             date:
               ""
-
           };
-
 
         const expected =
           typeof body.expected ===
@@ -998,15 +689,12 @@ export class ChecklistState {
             ? body.expected
             : 1;
 
-
         let newQty;
-
 
         if (
           body.mode ===
           "delta"
         ) {
-
           newQty =
             current.qty
             +
@@ -1015,40 +703,29 @@ export class ChecklistState {
               ||
               0
             );
-
         }
-
         else {
-
           newQty =
             Number(
               body.value
               ||
               0
             );
-
         }
-
 
         if (
           newQty < 0
         ) {
-
           newQty =
             0;
-
         }
-
 
         if (
           newQty > expected
         ) {
-
           newQty =
             expected;
-
         }
-
 
         const newDate =
           newQty > 0
@@ -1058,49 +735,32 @@ export class ChecklistState {
                 )
             : "";
 
-
         ticks[body.key] = {
-
           qty:
             newQty,
 
-
           date:
             newDate
-
         };
-
 
         await this.state.storage.put(
           "ticks",
           ticks
         );
 
-
         return json({
-
           ok:
             true,
-
 
           qty:
             newQty,
 
-
           date:
             newDate,
 
-
           ticks
-
         });
-
       }
-
-
-      // =================================================
-      // NOTE
-      // =================================================
 
       if (
         url.pathname ===
@@ -1109,14 +769,11 @@ export class ChecklistState {
         request.method ===
           "POST"
       ) {
-
         const body =
           await request.json();
 
-
         const notes =
           await this.getAllNotes();
-
 
         const cleanNote =
           String(
@@ -1125,47 +782,30 @@ export class ChecklistState {
             ""
           ).trim();
 
-
         if (
           cleanNote
         ) {
-
           notes[body.key] =
             cleanNote;
-
         }
-
         else {
-
           delete notes[
             body.key
           ];
-
         }
-
 
         await this.state.storage.put(
           "notes",
           notes
         );
 
-
         return json({
-
           ok:
             true,
 
-
           notes
-
         });
-
       }
-
-
-      // =================================================
-      // RESET
-      // =================================================
 
       if (
         url.pathname ===
@@ -1174,43 +814,36 @@ export class ChecklistState {
         request.method ===
           "POST"
       ) {
-
         await this.state.storage.put(
           "ticks",
           {}
         );
-
 
         await this.state.storage.put(
           "notes",
           {}
         );
 
-
         await this.state.storage.put(
           "reportSent",
           false
         );
 
-
         return json({
-
           ok:
             true
-
         });
-
       }
-
 
       // =================================================
       // SEND REPORT
       //
-      // Normal:
-      // checker required.
+      // Normal report:
+      //   Adrian / Leo / Liviu is REQUIRED.
       //
-      // Test:
-      // force:true keeps existing admin test working.
+      // Admin test:
+      //   force:true sends with Checked By blank.
+      //   It never writes "Test email".
       // =================================================
 
       if (
@@ -1220,30 +853,21 @@ export class ChecklistState {
         request.method ===
           "POST"
       ) {
-
         let body = {};
 
-
         try {
-
           body =
             await request.json();
-
         }
-
         catch (
           error
         ) {
-
           body = {};
-
         }
-
 
         const force =
           body.force ===
           true;
-
 
         const requestedChecker =
           String(
@@ -1252,22 +876,10 @@ export class ChecklistState {
             ""
           ).trim();
 
-
-      const checkedBy =
-  force
-    ? (
-        ALLOWED_CHECKERS.has(
-          requestedChecker
-        )
-          ? requestedChecker
-          : ""
-      )
-    : requestedChecker;
-
-
-        // ===============================================
-        // VALIDATE CHECKER
-        // ===============================================
+        const checkedBy =
+          force
+            ? ""
+            : requestedChecker;
 
         if (
           !force
@@ -1276,304 +888,189 @@ export class ChecklistState {
             checkedBy
           )
         ) {
-
           return json(
-
             {
-
               ok:
                 false,
 
-
               error:
                 "Please select who checked the list: Adrian, Leo or Liviu."
-
             },
-
             400
-
           );
-
         }
-
-
-        // ===============================================
-        // NORMAL REPORT VALIDATION
-        // ===============================================
 
         if (
           !force
         ) {
-
           const alreadySent =
             await this.state.storage.get(
               "reportSent"
             );
 
-
           if (
             alreadySent
           ) {
-
             return json({
-
               ok:
                 true,
-
 
               skipped:
                 true,
 
-
               reason:
                 "already sent"
-
             });
-
           }
-
 
           const complete =
             await this.isFullyComplete();
 
-
           if (
             !complete
           ) {
-
             return json({
-
               ok:
                 true,
-
 
               skipped:
                 true,
 
-
               reason:
                 "not complete"
-
             });
-
           }
-
         }
-
-
-        // ===============================================
-        // SEND
-        // ===============================================
 
         const result =
           await this.sendReportEmail(
             checkedBy
           );
 
-
         if (
           !result.ok
         ) {
-
           return json(
-
             {
-
               ok:
                 false,
 
-
               error:
                 result.error
-
             },
-
             502
-
           );
-
         }
-
-
-        // ===============================================
-        // MARK REAL REPORT AS SENT
-        // ===============================================
 
         if (
           !force
         ) {
-
           await this.state.storage.put(
             "reportSent",
             true
           );
 
-
           await this.state.storage.put(
             "lastCheckedBy",
             checkedBy
           );
-
         }
 
-
         return json({
-
           ok:
             true,
-
 
           sent:
             true,
 
-
           test:
             force,
 
-
           checkedBy
-
         });
-
       }
 
-
-      // =================================================
-      // NOT FOUND
-      // =================================================
-
       return json(
-
         {
-
           error:
             "not found"
-
         },
-
         404
-
       );
-
     }
-
-
     catch (
       err
     ) {
-
       return json(
-
         {
-
           error:
             String(
-
               err
               &&
               err.message
-
                 ? err.message
-
                 : err
-
             )
-
         },
-
         500
-
       );
-
     }
-
   }
-
 }
-
-
-// =====================================================
-// JSON RESPONSE
-// =====================================================
 
 function json(
   data,
   status = 200
 ) {
-
   return new Response(
-
     JSON.stringify(
       data
     ),
-
     {
-
       status,
 
-
       headers: {
-
         "content-type":
           "application/json"
-
       }
-
     }
-
   );
-
 }
-
 
 // =====================================================
 // MAIN WORKER
 // =====================================================
 
 export default {
-
   async fetch(
     request,
     env,
     ctx
   ) {
-
     const url =
       new URL(
         request.url
       );
-
-
-    // =================================================
-    // API
-    // =================================================
 
     if (
       url.pathname.startsWith(
         "/api/"
       )
     ) {
-
-      // IMPORTANT:
-      // keep the same Durable Object instance.
-
       const id =
         env.CHECKLIST.idFromName(
           "singleton"
         );
-
 
       const stub =
         env.CHECKLIST.get(
           id
         );
 
-
       const forwardUrl =
         new URL(
           request.url
         );
-
 
       forwardUrl.pathname =
         url.pathname.slice(
@@ -1582,33 +1079,21 @@ export default {
         ||
         "/";
 
-
       const forwardReq =
         new Request(
-
           forwardUrl.toString(),
-
           request
-
         );
-
 
       return stub.fetch(
         forwardReq
       );
-
     }
-
-
-    // =================================================
-    // STATIC WEBSITE
-    // =================================================
 
     const response =
       await env.ASSETS.fetch(
         request
       );
-
 
     const contentType =
       response.headers.get(
@@ -1617,114 +1102,112 @@ export default {
       ||
       "";
 
-
-    // =================================================
-    // AUTOMATICALLY ADD checker-prompt.js
-    //
-    // This avoids modifying the huge index.html.
-    // =================================================
-
+    // IMPORTANT FIX:
+    // checker-prompt.js is injected IMMEDIATELY after <body>.
+    // This makes it load before the existing checklist scripts
+    // can perform an automatic report send.
     if (
       contentType.includes(
         "text/html"
       )
     ) {
-
       const html =
         await response.text();
-
 
       if (
         !html.includes(
           "/checker-prompt.js"
         )
       ) {
+        const checkerScript =
+          '<script src="/checker-prompt.js"></script>';
 
-      const checkerScript =
-  '<script src="/checker-prompt.js"></script>';
+        let injected;
 
-let injected;
+        if (
+          html.includes(
+            "<body>"
+          )
+        ) {
+          injected =
+            html.replace(
+              "<body>",
+              "<body>\n"
+              +
+              checkerScript
+            );
+        }
+        else if (
+          /<body[^>]*>/i.test(
+            html
+          )
+        ) {
+          injected =
+            html.replace(
+              /<body([^>]*)>/i,
+              match =>
+                match
+                +
+                "\n"
+                +
+                checkerScript
+            );
+        }
+        else {
+          injected =
+            checkerScript
+            +
+            "\n"
+            +
+            html;
+        }
 
-if (
-  html.includes("<body>")
-) {
-
-  injected =
-    html.replace(
-      "<body>",
-      "<body>\n" + checkerScript
-    );
-
-} else {
-
-  injected =
-    checkerScript
-    +
-    "\n"
-    +
-    html;
-
-}
         const headers =
           new Headers(
             response.headers
           );
 
-
         headers.delete(
           "content-length"
         );
 
-
         return new Response(
-
           injected,
-
           {
-
             status:
               response.status,
-
 
             statusText:
               response.statusText,
 
-
             headers
-
           }
-
         );
-
       }
 
+      const headers =
+        new Headers(
+          response.headers
+        );
+
+      headers.delete(
+        "content-length"
+      );
 
       return new Response(
-
         html,
-
         {
-
           status:
             response.status,
-
 
           statusText:
             response.statusText,
 
-
-          headers:
-            response.headers
-
+          headers
         }
-
       );
-
     }
 
-
     return response;
-
   }
-
 };
