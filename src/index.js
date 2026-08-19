@@ -1,47 +1,85 @@
-// checktourup
-// Durable Object + email report with mandatory checker selection.
-// Allowed checker names: Adrian, Leo, Liviu.
+// =====================================================
+// CHECKTOURUP
+// src/index.js
+//
+// Checklist + Durable Object + Resend
+// Checker obrigatório:
+// Adrian / Leo / Liviu
+// =====================================================
 
 const ALLOWED_CHECKERS = new Set([
-  'Adrian',
-  'Leo',
-  'Liviu'
+  "Adrian",
+  "Leo",
+  "Liviu"
 ]);
 
+
+// =====================================================
+// DURABLE OBJECT
+// =====================================================
+
 export class ChecklistState {
+
   constructor(state, env) {
     this.state = state;
     this.env = env;
   }
 
+
+  // ===================================================
+  // DATASET
+  // ===================================================
+
   async getDataset() {
+
     return (
       await this.state.storage.get(
-        'dataset'
+        "dataset"
       )
     ) || null;
+
   }
+
+
+  // ===================================================
+  // TICKS
+  // ===================================================
 
   async getAllTicks() {
+
     return (
       await this.state.storage.get(
-        'ticks'
+        "ticks"
       )
     ) || {};
+
   }
 
+
+  // ===================================================
+  // NOTES
+  // ===================================================
+
   async getAllNotes() {
+
     return (
       await this.state.storage.get(
-        'notes'
+        "notes"
       )
     ) || {};
+
   }
+
+
+  // ===================================================
+  // EXPECTED QUANTITY
+  // ===================================================
 
   parseExpectedQty(
     row,
     qtyColIndex
   ) {
+
     if (
       qtyColIndex == null ||
       qtyColIndex < 0
@@ -49,30 +87,40 @@ export class ChecklistState {
       return 1;
     }
 
+
     const raw =
       row[qtyColIndex];
+
 
     if (
       raw === undefined ||
       raw === null ||
-      String(raw).trim() === ''
+      String(raw).trim() === ""
     ) {
       return 1;
     }
 
+
     const normalized =
       String(raw)
         .trim()
-        .replace(/\./g, '')
-        .replace(',', '.')
-        .replace(/[^0-9.\-]/g, '');
+        .replace(/\./g, "")
+        .replace(",", ".")
+        .replace(
+          /[^0-9.\-]/g,
+          ""
+        );
+
 
     const n =
       Math.round(
         Math.abs(
-          parseFloat(normalized)
+          parseFloat(
+            normalized
+          )
         )
       );
+
 
     return (
       Number.isFinite(n) &&
@@ -80,26 +128,38 @@ export class ChecklistState {
     )
       ? n
       : 1;
+
   }
 
+
+  // ===================================================
+  // UNIQUE ROW KEY
+  // ===================================================
+
   rowKey(row) {
+
     const str =
       row
         .map(
           c =>
-            String(c ?? '')
+            String(
+              c ?? ""
+            )
               .trim()
               .toLowerCase()
         )
-        .join('|');
+        .join("|");
+
 
     let h = 0;
+
 
     for (
       let i = 0;
       i < str.length;
       i++
     ) {
+
       h =
         (
           Math.imul(
@@ -111,56 +171,84 @@ export class ChecklistState {
         )
         |
         0;
+
     }
 
+
     return (
-      'r'
+      "r"
       +
       (h >>> 0)
         .toString(36)
     );
+
   }
 
-  // A row is complete when:
-  // 1. checked quantity reached expected quantity; OR
-  // 2. there is a note explaining why the item is unavailable.
+
+  // ===================================================
+  // CHECK IF EVERYTHING IS COMPLETE
+  //
+  // Complete when:
+  // quantity reached expected quantity
+  // OR
+  // a note was entered
+  // ===================================================
+
   async isFullyComplete() {
+
     const dataset =
       await this.getDataset();
+
 
     if (
       !dataset ||
       !dataset.rows ||
       !dataset.rows.length
     ) {
+
       return false;
+
     }
+
 
     const ticks =
       await this.getAllTicks();
 
+
     const notes =
       await this.getAllNotes();
 
+
     const seen = {};
+
 
     for (
       const row
       of
       dataset.rows
     ) {
+
       const base =
-        this.rowKey(row);
+        this.rowKey(
+          row
+        );
+
 
       seen[base] =
         (seen[base] || 0)
         +
         1;
 
+
       const key =
         seen[base] > 1
-          ? base + 'd' + seen[base]
+          ? base
+            +
+            "d"
+            +
+            seen[base]
           : base;
+
 
       const expected =
         this.parseExpectedQty(
@@ -168,86 +256,149 @@ export class ChecklistState {
           dataset.qtyColIndex
         );
 
+
       const done =
         ticks[key]
-          ? (ticks[key].qty || 0)
+          ? (
+              ticks[key].qty
+              ||
+              0
+            )
           : 0;
+
 
       const note =
         String(
-          notes[key] || ''
+          notes[key]
+          ||
+          ""
         ).trim();
+
 
       if (
         done < expected &&
         !note
       ) {
+
         return false;
+
       }
+
     }
 
+
     return true;
+
   }
 
-  // The checker name is included in the CSV so that
-  // the file still identifies the person even if it
-  // is separated from the email later.
+
+  // ===================================================
+  // BUILD CSV
+  //
+  // Adds:
+  // Status
+  // Notes
+  // Checked By
+  // ===================================================
+
   async buildCsv(
-    checkedBy = ''
+    checkedBy = ""
   ) {
+
     const dataset =
       await this.getDataset();
+
 
     const ticks =
       await this.getAllTicks();
 
+
     const notes =
       await this.getAllNotes();
 
-    if (!dataset) {
-      return '';
+
+    if (
+      !dataset
+    ) {
+
+      return "";
+
     }
+
 
     const escape =
       value => {
+
         const s =
           String(
-            value ?? ''
+            value ?? ""
           );
 
+
         return /[",\n]/.test(s)
-          ? '"' + s.replace(/"/g, '""') + '"'
+          ? '"'
+            +
+            s.replace(
+              /"/g,
+              '""'
+            )
+            +
+            '"'
           : s;
+
       };
 
+
     const seen = {};
+
+
     const lines = [];
 
+
+    // HEADER
+
     lines.push(
+
       [
         ...dataset.headers,
-        'Status',
-        'Notes',
-        'Checked By'
+        "Status",
+        "Notes",
+        "Checked By"
       ]
-        .map(escape)
-        .join(',')
+        .map(
+          escape
+        )
+        .join(",")
+
     );
+
+
+    // ROWS
 
     dataset.rows.forEach(
       row => {
+
         const base =
-          this.rowKey(row);
+          this.rowKey(
+            row
+          );
+
 
         seen[base] =
           (seen[base] || 0)
           +
           1;
 
+
         const key =
           seen[base] > 1
-            ? base + 'd' + seen[base]
+            ? base
+              +
+              "d"
+              +
+              seen[base]
             : base;
+
 
         const expected =
           this.parseExpectedQty(
@@ -255,563 +406,852 @@ export class ChecklistState {
             dataset.qtyColIndex
           );
 
+
         const tickState =
           ticks[key];
 
+
         const done =
           tickState
-            ? (tickState.qty || 0)
+            ? (
+                tickState.qty
+                ||
+                0
+              )
             : 0;
+
 
         const note =
           String(
-            notes[key] || ''
+            notes[key]
+            ||
+            ""
           ).trim();
 
+
         let status;
+
 
         if (
           done >= expected
         ) {
+
           status =
-            'Done';
+            "Done";
+
         }
-        else if (note) {
+
+        else if (
+          note
+        ) {
+
           status =
-            'Not available / noted';
+            "Not available / noted";
+
         }
+
         else if (
           done > 0
         ) {
+
           status =
             `Partial (${done}/${expected})`;
-        }
-        else {
-          status =
-            'Not done';
+
         }
 
+        else {
+
+          status =
+            "Not done";
+
+        }
+
+
         lines.push(
+
           [
             ...row,
             status,
             note,
             checkedBy
           ]
-            .map(escape)
-            .join(',')
+            .map(
+              escape
+            )
+            .join(",")
+
         );
+
       }
     );
 
+
     return lines.join(
-      '\r\n'
+      "\r\n"
     );
+
   }
 
+
+  // ===================================================
+  // RESEND API KEY
+  //
+  // Supports:
+  // Cloudflare Secrets Store
+  // OR normal Worker Secret
+  // ===================================================
+
   async getResendApiKey() {
+
     const binding =
       this.env.RESEND_API_KEY;
 
-    if (!binding) {
+
+    if (
+      !binding
+    ) {
+
       return null;
+
     }
 
-    // Cloudflare Secrets Store
+
+    // Secrets Store
+
     if (
       typeof binding.get ===
-      'function'
+      "function"
     ) {
+
       return await binding.get();
+
     }
 
-    // Compatibility fallback for a normal Worker Secret.
+
+    // Normal Worker Secret
+
     if (
       typeof binding ===
-      'string'
+      "string"
     ) {
+
       return binding;
+
     }
 
+
     return null;
+
   }
+
+
+  // ===================================================
+  // SEND EMAIL
+  // ===================================================
 
   async sendReportEmail(
     checkedBy
   ) {
+
     const csv =
       await this.buildCsv(
         checkedBy
       );
 
+
     const recipients =
       (
         this.env.REPORT_RECIPIENTS
         ||
-        ''
+        ""
       )
-        .split(',')
+        .split(",")
         .map(
-          s => s.trim()
+          s =>
+            s.trim()
         )
-        .filter(Boolean);
+        .filter(
+          Boolean
+        );
+
 
     if (
       !recipients.length
     ) {
+
       return {
-        ok: false,
+
+        ok:
+          false,
+
         error:
-          'No REPORT_RECIPIENTS configured'
+          "No REPORT_RECIPIENTS configured"
+
       };
+
     }
+
 
     const apiKey =
       await this.getResendApiKey();
 
-    if (!apiKey) {
+
+    if (
+      !apiKey
+    ) {
+
       return {
-        ok: false,
+
+        ok:
+          false,
+
         error:
-          'No RESEND_API_KEY configured'
+          "No RESEND_API_KEY configured"
+
       };
+
     }
+
+
+    // =================================================
+    // CSV -> BASE64
+    // =================================================
 
     const bytes =
       new TextEncoder()
-        .encode(csv);
+        .encode(
+          csv
+        );
 
-    let binary = '';
+
+    let binary = "";
+
 
     for (
       let i = 0;
       i < bytes.length;
       i++
     ) {
+
       binary +=
         String.fromCharCode(
           bytes[i]
         );
+
     }
 
+
     const base64 =
-      btoa(binary);
+      btoa(
+        binary
+      );
+
 
     const safeChecker =
       String(
-        checkedBy || ''
+        checkedBy
+        ||
+        ""
       ).trim();
+
+
+    // =================================================
+    // RESEND
+    // =================================================
 
     const res =
       await fetch(
-        'https://api.resend.com/emails',
+
+        "https://api.resend.com/emails",
+
         {
+
           method:
-            'POST',
+            "POST",
+
 
           headers: {
-            'Authorization':
-              'Bearer ' + apiKey,
 
-            'content-type':
-              'application/json'
+            Authorization:
+              "Bearer "
+              +
+              apiKey,
+
+
+            "content-type":
+              "application/json"
+
           },
+
 
           body:
             JSON.stringify({
+
               from:
-                'Check List Tour <onboarding@resend.dev>',
+                "Check List Tour <onboarding@resend.dev>",
+
 
               to:
                 recipients,
 
+
               subject:
-                'Checklist complete — checked by '
+                "Checklist complete — checked by "
                 +
                 safeChecker,
 
+
               text:
-                'The checklist has been fully checked off.\n\n'
+
+                "The checklist has been fully checked off.\n\n"
+
                 +
-                'Checked by: '
+
+                "Checked by: "
                 +
                 safeChecker
+
                 +
-                '\n\nThe updated sheet is attached as a CSV.',
+
+                "\n\nThe updated sheet is attached as a CSV.",
+
 
               attachments: [
+
                 {
+
                   filename:
-                    'checklist-complete.csv',
+                    "checklist-complete.csv",
+
 
                   content:
                     base64
+
                 }
+
               ]
+
             })
+
         }
+
       );
+
 
     if (
       !res.ok
     ) {
+
       const errText =
         await res
           .text()
           .catch(
-            () => ''
+            () => ""
           );
 
+
       return {
-        ok: false,
+
+        ok:
+          false,
+
+
         error:
-          'Resend API error ('
+
+          "Resend API error ("
+
           +
+
           res.status
+
           +
-          '): '
+
+          "): "
+
           +
+
           errText
+
       };
+
     }
 
+
     return {
-      ok: true
+
+      ok:
+        true
+
     };
+
   }
 
-  async fetch(request) {
+
+  // ===================================================
+  // DURABLE OBJECT FETCH
+  // ===================================================
+
+  async fetch(
+    request
+  ) {
+
     const url =
       new URL(
         request.url
       );
 
+
     try {
-      // =============================================
-      // GET /state
-      // Full state - only used on page load.
-      // =============================================
+
+
+      // =================================================
+      // GET STATE
+      // =================================================
 
       if (
         url.pathname ===
-          '/state'
+          "/state"
         &&
         request.method ===
-          'GET'
+          "GET"
       ) {
+
         const dataset =
           await this.getDataset();
+
 
         const ticks =
           await this.getAllTicks();
 
+
         const notes =
           await this.getAllNotes();
 
+
         return json({
+
           headers:
             dataset
               ? dataset.headers
               : [],
+
 
           rows:
             dataset
               ? dataset.rows
               : [],
 
+
           tickColIndex:
             dataset
               ? dataset.tickColIndex
               : -1,
+
 
           qtyColIndex:
             dataset
               ? dataset.qtyColIndex
               : -1,
 
+
           ticks,
+
           notes
+
         });
+
       }
 
-      // =============================================
-      // GET /ticks
-      // Lightweight refresh.
-      // =============================================
+
+      // =================================================
+      // GET TICKS
+      // =================================================
 
       if (
         url.pathname ===
-          '/ticks'
+          "/ticks"
         &&
         request.method ===
-          'GET'
+          "GET"
       ) {
+
         const ticks =
           await this.getAllTicks();
+
 
         const notes =
           await this.getAllNotes();
 
+
         return json({
+
           ticks,
+
           notes
+
         });
+
       }
 
-      // =============================================
-      // POST /dataset
-      // Save / replace spreadsheet.
-      // =============================================
+
+      // =================================================
+      // SAVE DATASET
+      // =================================================
 
       if (
         url.pathname ===
-          '/dataset'
+          "/dataset"
         &&
         request.method ===
-          'POST'
+          "POST"
       ) {
+
         const body =
           await request.json();
 
+
         await this.state.storage.put(
-          'dataset',
+
+          "dataset",
+
           {
+
             headers:
               body.headers,
+
 
             rows:
               body.rows,
 
+
             tickColIndex:
               body.tickColIndex,
 
+
             qtyColIndex:
               body.qtyColIndex
+
           }
+
         );
 
-        // New checklist cycle.
+
+        // New checklist:
+        // allow a new report.
+
         await this.state.storage.put(
-          'reportSent',
+          "reportSent",
           false
         );
 
+
         return json({
-          ok: true
+
+          ok:
+            true
+
         });
+
       }
 
-      // =============================================
-      // POST /tick
-      // Atomic progress update.
-      // =============================================
+
+      // =================================================
+      // TICK
+      // =================================================
 
       if (
         url.pathname ===
-          '/tick'
+          "/tick"
         &&
         request.method ===
-          'POST'
+          "POST"
       ) {
+
         const body =
           await request.json();
 
+
         const ticks =
           await this.getAllTicks();
+
 
         const current =
           ticks[body.key]
           ||
           {
-            qty: 0,
-            date: ''
+
+            qty:
+              0,
+
+
+            date:
+              ""
+
           };
+
 
         const expected =
           typeof body.expected ===
-            'number'
+            "number"
           &&
           body.expected > 0
             ? body.expected
             : 1;
 
+
         let newQty;
+
 
         if (
           body.mode ===
-          'delta'
+          "delta"
         ) {
+
           newQty =
             current.qty
             +
             Number(
-              body.value || 0
+              body.value
+              ||
+              0
             );
+
         }
+
         else {
+
           newQty =
             Number(
-              body.value || 0
+              body.value
+              ||
+              0
             );
+
         }
+
 
         if (
           newQty < 0
         ) {
-          newQty = 0;
+
+          newQty =
+            0;
+
         }
+
 
         if (
           newQty > expected
         ) {
+
           newQty =
             expected;
+
         }
+
 
         const newDate =
           newQty > 0
             ? new Date()
                 .toLocaleDateString(
-                  'en-US'
+                  "en-US"
                 )
-            : '';
+            : "";
+
 
         ticks[body.key] = {
+
           qty:
             newQty,
+
 
           date:
             newDate
+
         };
 
+
         await this.state.storage.put(
-          'ticks',
+          "ticks",
           ticks
         );
 
+
         return json({
-          ok: true,
+
+          ok:
+            true,
+
+
           qty:
             newQty,
+
+
           date:
             newDate,
+
+
           ticks
+
         });
+
       }
 
-      // =============================================
-      // POST /note
-      // Save or remove note.
-      // =============================================
+
+      // =================================================
+      // NOTE
+      // =================================================
 
       if (
         url.pathname ===
-          '/note'
+          "/note"
         &&
         request.method ===
-          'POST'
+          "POST"
       ) {
+
         const body =
           await request.json();
+
 
         const notes =
           await this.getAllNotes();
 
+
         const cleanNote =
           String(
-            body.note || ''
+            body.note
+            ||
+            ""
           ).trim();
 
-        if (cleanNote) {
+
+        if (
+          cleanNote
+        ) {
+
           notes[body.key] =
             cleanNote;
+
         }
+
         else {
+
           delete notes[
             body.key
           ];
+
         }
 
+
         await this.state.storage.put(
-          'notes',
+          "notes",
           notes
         );
 
+
         return json({
-          ok: true,
+
+          ok:
+            true,
+
+
           notes
+
         });
+
       }
 
-      // =============================================
-      // POST /reset
-      // Clear checks and notes.
-      // =============================================
+
+      // =================================================
+      // RESET
+      // =================================================
 
       if (
         url.pathname ===
-          '/reset'
+          "/reset"
         &&
         request.method ===
-          'POST'
+          "POST"
       ) {
+
         await this.state.storage.put(
-          'ticks',
+          "ticks",
           {}
         );
 
+
         await this.state.storage.put(
-          'notes',
+          "notes",
           {}
         );
 
+
         await this.state.storage.put(
-          'reportSent',
+          "reportSent",
           false
         );
 
+
         return json({
-          ok: true
+
+          ok:
+            true
+
         });
+
       }
 
-      // =============================================
-      // POST /send-report
+
+      // =================================================
+      // SEND REPORT
       //
       // Normal:
-      //   checklist must be complete AND checker name
-      //   must be Adrian, Leo or Liviu.
+      // checker required.
       //
-      // force:true:
-      //   keeps the admin test button working.
-      // =============================================
+      // Test:
+      // force:true keeps existing admin test working.
+      // =================================================
 
       if (
         url.pathname ===
-          '/send-report'
+          "/send-report"
         &&
         request.method ===
-          'POST'
+          "POST"
       ) {
+
         let body = {};
 
+
         try {
+
           body =
             await request.json();
-        }
-        catch (e) {
-          body = {};
+
         }
 
+        catch (
+          error
+        ) {
+
+          body = {};
+
+        }
+
+
         const force =
-          body.force === true;
+          body.force ===
+          true;
+
 
         const requestedChecker =
           String(
             body.checkedBy
             ||
-            ''
+            ""
           ).trim();
+
 
         const checkedBy =
           force
@@ -820,9 +1260,14 @@ export class ChecklistState {
                   requestedChecker
                 )
                   ? requestedChecker
-                  : 'Test email'
+                  : "Test email"
               )
             : requestedChecker;
+
+
+        // ===============================================
+        // VALIDATE CHECKER
+        // ===============================================
 
         if (
           !force
@@ -831,133 +1276,253 @@ export class ChecklistState {
             checkedBy
           )
         ) {
+
           return json(
+
             {
-              ok: false,
+
+              ok:
+                false,
+
+
               error:
-                'Please select who checked the list: Adrian, Leo or Liviu.'
+                "Please select who checked the list: Adrian, Leo or Liviu."
+
             },
+
             400
+
           );
+
         }
 
-        if (!force) {
+
+        // ===============================================
+        // NORMAL REPORT VALIDATION
+        // ===============================================
+
+        if (
+          !force
+        ) {
+
           const alreadySent =
             await this.state.storage.get(
-              'reportSent'
+              "reportSent"
             );
+
 
           if (
             alreadySent
           ) {
+
             return json({
-              ok: true,
-              skipped: true,
+
+              ok:
+                true,
+
+
+              skipped:
+                true,
+
+
               reason:
-                'already sent'
+                "already sent"
+
             });
+
           }
+
 
           const complete =
             await this.isFullyComplete();
 
+
           if (
             !complete
           ) {
+
             return json({
-              ok: true,
-              skipped: true,
+
+              ok:
+                true,
+
+
+              skipped:
+                true,
+
+
               reason:
-                'not complete'
+                "not complete"
+
             });
+
           }
+
         }
+
+
+        // ===============================================
+        // SEND
+        // ===============================================
 
         const result =
           await this.sendReportEmail(
             checkedBy
           );
 
+
         if (
           !result.ok
         ) {
+
           return json(
+
             {
-              ok: false,
+
+              ok:
+                false,
+
+
               error:
                 result.error
+
             },
+
             502
+
           );
+
         }
 
-        // A manual test must NOT prevent
-        // the real automatic report later.
-        if (!force) {
+
+        // ===============================================
+        // MARK REAL REPORT AS SENT
+        // ===============================================
+
+        if (
+          !force
+        ) {
+
           await this.state.storage.put(
-            'reportSent',
+            "reportSent",
             true
           );
 
+
           await this.state.storage.put(
-            'lastCheckedBy',
+            "lastCheckedBy",
             checkedBy
           );
+
         }
 
+
         return json({
-          ok: true,
-          sent: true,
+
+          ok:
+            true,
+
+
+          sent:
+            true,
+
+
           test:
             force,
+
+
           checkedBy
+
         });
+
       }
 
+
+      // =================================================
+      // NOT FOUND
+      // =================================================
+
       return json(
+
         {
+
           error:
-            'not found'
+            "not found"
+
         },
+
         404
+
       );
+
     }
-    catch (err) {
+
+
+    catch (
+      err
+    ) {
+
       return json(
+
         {
+
           error:
             String(
+
               err
               &&
               err.message
+
                 ? err.message
+
                 : err
+
             )
+
         },
+
         500
+
       );
+
     }
+
   }
+
 }
 
+
+// =====================================================
+// JSON RESPONSE
+// =====================================================
 
 function json(
   data,
   status = 200
 ) {
+
   return new Response(
+
     JSON.stringify(
       data
     ),
+
     {
+
       status,
 
+
       headers: {
-        'content-type':
-          'application/json'
+
+        "content-type":
+          "application/json"
+
       }
+
     }
+
   );
+
 }
 
 
@@ -966,138 +1531,195 @@ function json(
 // =====================================================
 
 export default {
+
   async fetch(
     request,
     env,
     ctx
   ) {
+
     const url =
       new URL(
         request.url
       );
 
+
+    // =================================================
+    // API
+    // =================================================
+
     if (
       url.pathname.startsWith(
-        '/api/'
+        "/api/"
       )
     ) {
+
       // IMPORTANT:
-      // Keep the original Durable Object name.
-      // Changing this creates a different database.
+      // keep the same Durable Object instance.
+
       const id =
         env.CHECKLIST.idFromName(
-          'singleton'
+          "singleton"
         );
+
 
       const stub =
         env.CHECKLIST.get(
           id
         );
 
+
       const forwardUrl =
         new URL(
           request.url
         );
 
+
       forwardUrl.pathname =
         url.pathname.slice(
-          '/api'.length
+          "/api".length
         )
         ||
-        '/';
+        "/";
+
 
       const forwardReq =
         new Request(
+
           forwardUrl.toString(),
+
           request
+
         );
+
 
       return stub.fetch(
         forwardReq
       );
+
     }
 
-    // Serve the normal static website.
+
+    // =================================================
+    // STATIC WEBSITE
+    // =================================================
+
     const response =
       await env.ASSETS.fetch(
         request
       );
 
-    // Inject checker-prompt.js into HTML automatically.
-    // This means the existing 4,800-line index.html does
-    // NOT need to be edited.
+
     const contentType =
       response.headers.get(
-        'content-type'
+        "content-type"
       )
       ||
-      '';
+      "";
+
+
+    // =================================================
+    // AUTOMATICALLY ADD checker-prompt.js
+    //
+    // This avoids modifying the huge index.html.
+    // =================================================
 
     if (
       contentType.includes(
-        'text/html'
+        "text/html"
       )
     ) {
+
       const html =
         await response.text();
 
+
       if (
         !html.includes(
-          '/checker-prompt.js'
+          "/checker-prompt.js"
         )
       ) {
+
         const injected =
           html.includes(
-            '</body>'
+            "</body>"
           )
+
             ? html.replace(
-                '</body>',
+
+                "</body>",
+
                 '<script src="/checker-prompt.js"></script>\n</body>'
+
               )
+
             : (
                 html
                 +
                 '\n<script src="/checker-prompt.js"></script>'
               );
 
+
         const headers =
           new Headers(
             response.headers
           );
 
+
         headers.delete(
-          'content-length'
+          "content-length"
         );
 
+
         return new Response(
+
           injected,
+
           {
+
             status:
               response.status,
+
 
             statusText:
               response.statusText,
 
+
             headers
+
           }
+
         );
+
       }
 
+
       return new Response(
+
         html,
+
         {
+
           status:
             response.status,
+
 
           statusText:
             response.statusText,
 
+
           headers:
             response.headers
+
         }
+
       );
+
     }
 
+
     return response;
+
   }
+
 };
