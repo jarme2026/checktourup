@@ -1640,26 +1640,31 @@ export default {
         )
       ) {
 
-        const injected =
-          html.includes(
-            "</body>"
-          )
+      const checkerScript =
+  '<script src="/checker-prompt.js"></script>';
 
-            ? html.replace(
+let injected;
 
-                "</body>",
+if (
+  html.includes("<body>")
+) {
 
-                '<script src="/checker-prompt.js"></script>\n</body>'
+  injected =
+    html.replace(
+      "<body>",
+      "<body>\n" + checkerScript
+    );
 
-              )
+} else {
 
-            : (
-                html
-                +
-                '\n<script src="/checker-prompt.js"></script>'
-              );
+  injected =
+    checkerScript
+    +
+    "\n"
+    +
+    html;
 
-
+}
         const headers =
           new Headers(
             response.headers
