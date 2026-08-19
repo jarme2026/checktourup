@@ -45,6 +45,16 @@ export class ChecklistState {
     ) || {};
   }
 
+
+  async getAllCheckedBy() {
+    return (
+      await this.state.storage.get(
+        "checkedByRows"
+      )
+    ) || {};
+  }
+
+
   parseExpectedQty(
     row,
     qtyColIndex
@@ -222,6 +232,8 @@ export class ChecklistState {
       await this.getAllTicks();
 
     const notes =
+
+        const checkedByRows = await this.getAllCheckedBy();
       await this.getAllNotes();
 
     if (!dataset) {
@@ -383,9 +395,7 @@ export class ChecklistState {
     checkedBy
   ) {
     const csv =
-      await this.buildCsv(
-        checkedBy
-      );
+      await this.buildCsv();
 
     const recipients =
       (
@@ -575,6 +585,9 @@ export class ChecklistState {
         const notes =
           await this.getAllNotes();
 
+        const checkedByRows =
+          await this.getAllCheckedBy();
+
         return json({
           headers:
             dataset
@@ -598,7 +611,9 @@ export class ChecklistState {
 
           ticks,
 
-          notes
+          notes,
+
+          checkedByRows
         });
       }
 
@@ -646,6 +661,11 @@ export class ChecklistState {
             qtyColIndex:
               body.qtyColIndex
           }
+        );
+
+        await this.state.storage.put(
+          "checkedByRows",
+          {}
         );
 
         await this.state.storage.put(
@@ -750,6 +770,35 @@ export class ChecklistState {
           ticks
         );
 
+        const checkedByRows =
+          await this.getAllCheckedBy();
+
+        const checkerName =
+          normalizeCheckerName(
+            body.checkedBy
+          );
+
+        if (
+          newQty >= expected
+          &&
+          checkerName.length >= 2
+        ) {
+          checkedByRows[body.key] =
+            checkerName;
+        }
+        else if (
+          newQty < expected
+        ) {
+          delete checkedByRows[
+            body.key
+          ];
+        }
+
+        await this.state.storage.put(
+          "checkedByRows",
+          checkedByRows
+        );
+
         return json({
           ok:
             true,
@@ -801,6 +850,102 @@ export class ChecklistState {
           notes
         );
 
+        const checkedByRows =
+          await this.getAllCheckedBy();
+
+        const checkerName =
+          normalizeCheckerName(
+            body.checkedBy
+          );
+
+        if (
+          cleanNote
+          &&
+          checkerName.length >= 2
+        ) {
+          checkedByRows[body.key] =
+            checkerName;
+        }
+        else if (
+          !cleanNote
+        ) {
+          const ticks =
+            await this.getAllTicks();
+
+          const dataset =
+            await this.getDataset();
+
+          let stillComplete = false;
+
+          if (
+            dataset
+            &&
+            Array.isArray(
+              dataset.rows
+            )
+          ) {
+            const seen = {};
+
+            for (
+              const row
+              of
+              dataset.rows
+            ) {
+              const base =
+                this.rowKey(
+                  row
+                );
+
+              seen[base] =
+                (seen[base] || 0)
+                +
+                1;
+
+              const key =
+                seen[base] > 1
+                  ? base + "d" + seen[base]
+                  : base;
+
+              if (
+                key === body.key
+              ) {
+                const expected =
+                  this.parseExpectedQty(
+                    row,
+                    dataset.qtyColIndex
+                  );
+
+                const done =
+                  ticks[key]
+                    ? (
+                        ticks[key].qty
+                        ||
+                        0
+                      )
+                    : 0;
+
+                stillComplete =
+                  done >= expected;
+
+                break;
+              }
+            }
+          }
+
+          if (
+            !stillComplete
+          ) {
+            delete checkedByRows[
+              body.key
+            ];
+          }
+        }
+
+        await this.state.storage.put(
+          "checkedByRows",
+          checkedByRows
+        );
+
         return json({
           ok:
             true,
@@ -823,6 +968,11 @@ export class ChecklistState {
 
         await this.state.storage.put(
           "notes",
+          {}
+        );
+
+        await this.state.storage.put(
+          "checkedByRows",
           {}
         );
 
