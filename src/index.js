@@ -781,8 +781,21 @@ export class ChecklistState {
             body.checkedBy
           );
 
+        const wasComplete =
+          Number(
+            current.qty || 0
+          ) >= expected;
+
+        const isComplete =
+          newQty >= expected;
+
+        // Record the person only when this request is the one
+        // that changes the row from incomplete -> complete.
+        // Later sync/update requests cannot overwrite that name.
         if (
-          newQty >= expected
+          !wasComplete
+          &&
+          isComplete
           &&
           checkerName.length >= 2
         ) {
@@ -790,7 +803,7 @@ export class ChecklistState {
             checkerName;
         }
         else if (
-          newQty < expected
+          !isComplete
         ) {
           delete checkedByRows[
             body.key
@@ -829,6 +842,13 @@ export class ChecklistState {
         const notes =
           await this.getAllNotes();
 
+        const previousNote =
+          String(
+            notes[body.key]
+            ||
+            ""
+          );
+
         const cleanNote =
           String(
             body.note
@@ -861,8 +881,91 @@ export class ChecklistState {
             body.checkedBy
           );
 
+        const ticks =
+          await this.getAllTicks();
+
+        const dataset =
+          await this.getDataset();
+
+        let quantityComplete = false;
+
         if (
-          cleanNote
+          dataset
+          &&
+          Array.isArray(
+            dataset.rows
+          )
+        ) {
+          const seen = {};
+
+          for (
+            const row
+            of
+            dataset.rows
+          ) {
+            const base =
+              this.rowKey(
+                row
+              );
+
+            seen[base] =
+              (seen[base] || 0)
+              +
+              1;
+
+            const key =
+              seen[base] > 1
+                ? base + "d" + seen[base]
+                : base;
+
+            if (
+              key === body.key
+            ) {
+              const expected =
+                this.parseExpectedQty(
+                  row,
+                  dataset.qtyColIndex
+                );
+
+              const done =
+                ticks[key]
+                  ? (
+                      ticks[key].qty
+                      ||
+                      0
+                    )
+                  : 0;
+
+              quantityComplete =
+                done >= expected;
+
+              break;
+            }
+          }
+        }
+
+        const hadNote =
+          String(
+            previousNote || ""
+          ).trim().length > 0;
+
+        const hasNote =
+          cleanNote.length > 0;
+
+        const wasComplete =
+          quantityComplete
+          ||
+          hadNote;
+
+        const isComplete =
+          quantityComplete
+          ||
+          hasNote;
+
+        if (
+          !wasComplete
+          &&
+          isComplete
           &&
           checkerName.length >= 2
         ) {
@@ -870,78 +973,11 @@ export class ChecklistState {
             checkerName;
         }
         else if (
-          !cleanNote
+          !isComplete
         ) {
-          const ticks =
-            await this.getAllTicks();
-
-          const dataset =
-            await this.getDataset();
-
-          let stillComplete = false;
-
-          if (
-            dataset
-            &&
-            Array.isArray(
-              dataset.rows
-            )
-          ) {
-            const seen = {};
-
-            for (
-              const row
-              of
-              dataset.rows
-            ) {
-              const base =
-                this.rowKey(
-                  row
-                );
-
-              seen[base] =
-                (seen[base] || 0)
-                +
-                1;
-
-              const key =
-                seen[base] > 1
-                  ? base + "d" + seen[base]
-                  : base;
-
-              if (
-                key === body.key
-              ) {
-                const expected =
-                  this.parseExpectedQty(
-                    row,
-                    dataset.qtyColIndex
-                  );
-
-                const done =
-                  ticks[key]
-                    ? (
-                        ticks[key].qty
-                        ||
-                        0
-                      )
-                    : 0;
-
-                stillComplete =
-                  done >= expected;
-
-                break;
-              }
-            }
-          }
-
-          if (
-            !stillComplete
-          ) {
-            delete checkedByRows[
-              body.key
-            ];
-          }
+          delete checkedByRows[
+            body.key
+          ];
         }
 
         await this.state.storage.put(
