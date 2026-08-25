@@ -781,39 +781,76 @@ export class ChecklistState {
             body.checkedBy
           );
 
-        const wasComplete =
+        const previousQty =
           Number(
             current.qty || 0
-          ) >= expected;
+          );
 
         const isComplete =
           newQty >= expected;
 
-        // Record the person only when this request is the one
-        // that changes the row from incomplete -> complete.
-        // Later sync/update requests cannot overwrite that name.
+        const madePositiveProgress =
+          newQty > previousQty;
+
         if (
-          !wasComplete
-          &&
-          isComplete
+          madePositiveProgress
           &&
           checkerName.length >= 2
         ) {
+          const existingNames =
+            String(
+              checkedByRows[body.key] || ""
+            )
+              .split(",")
+              .map(
+                name => name.trim()
+              )
+              .filter(Boolean);
+
+          if (
+            !existingNames.includes(
+              checkerName
+            )
+          ) {
+            existingNames.push(
+              checkerName
+            );
+          }
+
           checkedByRows[body.key] =
-            checkerName;
+            existingNames.join(", ");
         }
-        else if (
-          !isComplete
+
+        // If all progress for the row is removed, clear its attribution.
+        if (
+          newQty === 0
         ) {
-          delete checkedByRows[
-            body.key
-          ];
+          const notesNow =
+            await this.getAllNotes();
+
+          const noteNow =
+            String(
+              notesNow[body.key] || ""
+            ).trim();
+
+          if (
+            !noteNow
+          ) {
+            delete checkedByRows[
+              body.key
+            ];
+          }
         }
 
         await this.state.storage.put(
           "checkedByRows",
           checkedByRows
         );
+
+        const allComplete =
+          isComplete
+            ? await this.isFullyComplete()
+            : false;
 
         return json({
           ok:
@@ -825,7 +862,9 @@ export class ChecklistState {
           date:
             newDate,
 
-          ticks
+          ticks,
+
+          allComplete
         });
       }
 
@@ -881,103 +920,55 @@ export class ChecklistState {
             body.checkedBy
           );
 
-        const ticks =
-          await this.getAllTicks();
-
-        const dataset =
-          await this.getDataset();
-
-        let quantityComplete = false;
-
         if (
-          dataset
-          &&
-          Array.isArray(
-            dataset.rows
-          )
-        ) {
-          const seen = {};
-
-          for (
-            const row
-            of
-            dataset.rows
-          ) {
-            const base =
-              this.rowKey(
-                row
-              );
-
-            seen[base] =
-              (seen[base] || 0)
-              +
-              1;
-
-            const key =
-              seen[base] > 1
-                ? base + "d" + seen[base]
-                : base;
-
-            if (
-              key === body.key
-            ) {
-              const expected =
-                this.parseExpectedQty(
-                  row,
-                  dataset.qtyColIndex
-                );
-
-              const done =
-                ticks[key]
-                  ? (
-                      ticks[key].qty
-                      ||
-                      0
-                    )
-                  : 0;
-
-              quantityComplete =
-                done >= expected;
-
-              break;
-            }
-          }
-        }
-
-        const hadNote =
-          String(
-            previousNote || ""
-          ).trim().length > 0;
-
-        const hasNote =
-          cleanNote.length > 0;
-
-        const wasComplete =
-          quantityComplete
-          ||
-          hadNote;
-
-        const isComplete =
-          quantityComplete
-          ||
-          hasNote;
-
-        if (
-          !wasComplete
-          &&
-          isComplete
+          cleanNote
           &&
           checkerName.length >= 2
         ) {
+          const existingNames =
+            String(
+              checkedByRows[body.key] || ""
+            )
+              .split(",")
+              .map(
+                name => name.trim()
+              )
+              .filter(Boolean);
+
+          if (
+            !existingNames.includes(
+              checkerName
+            )
+          ) {
+            existingNames.push(
+              checkerName
+            );
+          }
+
           checkedByRows[body.key] =
-            checkerName;
+            existingNames.join(", ");
         }
-        else if (
-          !isComplete
+
+        if (
+          !cleanNote
         ) {
-          delete checkedByRows[
-            body.key
-          ];
+          const ticksNow =
+            await this.getAllTicks();
+
+          const qtyNow =
+            ticksNow[body.key]
+              ? Number(
+                  ticksNow[body.key].qty || 0
+                )
+              : 0;
+
+          if (
+            qtyNow === 0
+          ) {
+            delete checkedByRows[
+              body.key
+            ];
+          }
         }
 
         await this.state.storage.put(
@@ -985,11 +976,18 @@ export class ChecklistState {
           checkedByRows
         );
 
+        const allComplete =
+          isComplete
+            ? await this.isFullyComplete()
+            : false;
+
         return json({
           ok:
             true,
 
-          notes
+          notes,
+
+          allComplete
         });
       }
 
