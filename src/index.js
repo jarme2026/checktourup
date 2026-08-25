@@ -1,12 +1,14 @@
 // =====================================================
-// CHECKTOURUP
-// src/index.js
+// SHARED CHECKLIST WORKER
+// Used by checktourup and checktourbo
 //
-// Checklist + Durable Object + Resend
-// Checker obrigatório:
-// Adrian / Leo / Liviu
+// Responsibilities:
+// - persistent shared checklist state (Durable Object)
+// - multi-device progress synchronization
+// - per-item checker attribution
+// - notes / quantities
+// - final CSV report by email
 // =====================================================
-
 
 function normalizeCheckerName(value) {
   return String(value || '')
