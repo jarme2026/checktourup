@@ -737,11 +737,13 @@ async function saveNote(key, note){
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ key, note, checkedBy: currentCheckerName() })
     });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const data = await res.json();
     if (data && data.notes) allNotes = data.notes;
+    return data;
   }catch(e){
     console.error('Failed to save note', e);
+    return null;
   }
 }
 
@@ -802,13 +804,16 @@ function updateProgress(){
     allDoneBanner.textContent = '✓ All items checked — this list is complete!';
   }
 
-  if (isAllDone && !wasAllDone){
-    maybeSendReport();
-  }
+  // Send only after the server confirms shared completion.
   wasAllDone = isAllDone;
 }
 
+let reportSendInFlight = false;
+
 async function maybeSendReport(){
+  if (reportSendInFlight) return;
+  reportSendInFlight = true;
+
   try{
     const checkedBy = currentCheckerName() || await requestCheckerName();
 
@@ -843,6 +848,8 @@ async function maybeSendReport(){
   }catch(e){
     console.error('Failed to send report', e);
     alert('Could not reach the server to send the report.');
+  }finally{
+    reportSendInFlight = false;
   }
 }
 
@@ -951,6 +958,9 @@ function renderTable(){
             applySearchFilter();
             const result = await saveTickSet(rowKeys[ri], allTicks[rowKeys[ri]], expected);
             if (result && result.ticks) applyRemoteState(result.ticks);
+            if (result && result.allComplete){
+              await maybeSendReport();
+            }
           });
           ref.control = input;
         } else {
@@ -1043,6 +1053,9 @@ function renderTable(){
                 updateProgress();
               }
               if (result && result.ticks) applyRemoteState(result.ticks);
+              if (result && result.allComplete){
+                await maybeSendReport();
+              }
             }, 450);
           };
 
@@ -1089,7 +1102,10 @@ function renderTable(){
         if (noteTimer) clearTimeout(noteTimer);
         noteTimer = setTimeout(async () => {
           allNotes[rowKeys[ri]] = noteInput.value;
-          await saveNote(rowKeys[ri], noteInput.value);
+          const noteResult = await saveNote(rowKeys[ri], noteInput.value);
+          if (noteResult && noteResult.allComplete){
+            await maybeSendReport();
+          }
         }, 500);
       });
       notesTd.appendChild(noteInput);
