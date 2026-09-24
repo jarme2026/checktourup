@@ -87,9 +87,9 @@
     display: flex; justify-content: space-between; align-items: baseline;
     gap: 12px; margin: -8px 0 16px 2px; flex-wrap: wrap;
   }
-  .search-count{ font-size: 12px; color: var(--ink-soft); margin: 0; font-family: 'Courier New', monospace; }
+  .search-count{ font-size: 15px; color: var(--ink-soft); margin: 0; font-family: 'Courier New', monospace; }
   .total-sofas{
-    font-size: 12px; color: var(--ink); font-family: 'Courier New', monospace;
+    font-size: 15px; color: var(--ink); font-family: 'Courier New', monospace;
     font-weight: bold; white-space: nowrap;
   }
   .table-scroll{ overflow-x: auto; border: 1px solid var(--paper-line); border-radius: 6px; }
@@ -712,10 +712,10 @@ function parseExpectedQty(row){
 
 // "Total sofas": sum of the Quantity column for every row whose
 // description (any column, matched the same way the search bar already
-// does) is a chaise longue, a corner module, or a 2/2.5/3-seater — the
+// does) is a chaise longue, a corner module, or a 1/1.5/2/2.5/3-seater — the
 // hyphen in "2-Seater" style descriptions is optional so both
 // "2 Seater" and "2-Seater" match.
-const SOFA_SEATER_PATTERN = /\b(2\.5|2|3)[\s-]*seater\b/i;
+const SOFA_SEATER_PATTERN = /\b(1\.5|2\.5|1|2|3)[\s-]*seater\b/i;
 
 function rowIsSofaCategory(row){
   const text = row.map(c => String(c ?? '')).join(' ').toLowerCase();
